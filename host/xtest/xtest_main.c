@@ -79,7 +79,7 @@ ADBG_SUITE_ENTRY(XTEST_TEE_10003, NULL)
 ADBG_SUITE_DEFINE_END()
 
 static const char gdevname_tz[] = "opteearmtz00";
-char *_device = (char *)gdevname_tz;
+char *_device = NULL;
 
 int main(int argc, char *argv[])
 {
