@@ -33,6 +33,7 @@ srcs := xtest_1000.c \
 	xtest_10000.c \
 	xtest_20000.c \
 	xtest_benchmark_1000.c \
+	xtest_tui_1000.c \
 	xtest_helpers.c \
 	xtest_main.c \
 	xtest_test.c \
@@ -75,6 +76,7 @@ CFLAGS += -I../../ta/storage/include
 CFLAGS += -I../../ta/storage_benchmark/include
 CFLAGS += -I../../ta/concurrent/include
 CFLAGS += -I../../ta/concurrent_large/include
+CFLAGS += -I../../ta/tui/include
 ifdef CFG_GP_PACKAGE_PATH
 CFLAGS += -I../../ta/GP_TTA_Arithmetical
 CFLAGS += -I../../ta/GP_TTA_Crypto
@@ -119,7 +121,7 @@ CFLAGS += -DCFG_RPMB_FS
 endif
 
 ifndef CFG_GP_PACKAGE_PATH
-CFLAGS += -Wall -Wcast-align -Werror \
+CFLAGS += -std=gnu99 -Wall -Wcast-align -Werror \
 	  -Werror-implicit-function-declaration -Wextra -Wfloat-equal \
 	  -Wformat-nonliteral -Wformat-security -Wformat=2 -Winit-self \
 	  -Wmissing-declarations -Wmissing-format-attribute \

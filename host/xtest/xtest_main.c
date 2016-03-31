@@ -106,11 +106,20 @@ ADBG_SUITE_DEFINE_END()
 
 
 ADBG_SUITE_DECLARE(XTEST_TEE_BENCHMARK)
-
 ADBG_SUITE_DEFINE_BEGIN(XTEST_TEE_BENCHMARK, NULL)
 ADBG_SUITE_ENTRY(XTEST_TEE_BENCHMARK_1001, NULL)
 ADBG_SUITE_ENTRY(XTEST_TEE_BENCHMARK_1002, NULL)
 ADBG_SUITE_ENTRY(XTEST_TEE_BENCHMARK_1003, NULL)
+ADBG_SUITE_DEFINE_END()
+
+
+ADBG_SUITE_DECLARE(XTEST_TUI)
+ADBG_SUITE_DEFINE_BEGIN(XTEST_TUI, NULL)
+ADBG_SUITE_ENTRY(XTEST_TUI_1001, NULL)
+ADBG_SUITE_ENTRY(XTEST_TUI_1002, NULL)
+ADBG_SUITE_ENTRY(XTEST_TUI_1003, NULL)
+ADBG_SUITE_ENTRY(XTEST_TUI_1004, NULL)
+ADBG_SUITE_ENTRY(XTEST_TUI_1005, NULL)
 ADBG_SUITE_DEFINE_END()
 
 char *_device = NULL;
@@ -127,7 +136,7 @@ void usage(char *program)
 	printf("options:\n");
 	printf("\t-d <device-type>   default not set, use any\n");
 	printf("\t-l <level>         test suite level: [0-15]\n");
-	printf("\t-t <test_suite>    available test suite: regression, benchmark\n");
+	printf("\t-t <test_suite>    available test suite: regression, benchmark, tui\n");
 	printf("\t                   default value = %s\n", gsuitename);
 	printf("\t-h                 show usage\n");
 	printf("\n");
@@ -160,7 +169,7 @@ int main(int argc, char *argv[])
 		default:
 			usage(argv[0]);
 			return -1;
- 		}
+		}
 
 	for (index = optind; index < argc; index++)
 		printf("Test ID: %s\n", argv[index]);
@@ -179,6 +188,9 @@ int main(int argc, char *argv[])
 		ret = Do_ADBG_RunSuite(&ADBG_Suite_XTEST_TEE_TEST, argc - optind, (argv + optind));
 	else if (strcmp(test_suite, "benchmark") == 0)
 		ret = Do_ADBG_RunSuite(&ADBG_Suite_XTEST_TEE_BENCHMARK, argc - optind, (argv + optind));
+	else if (strcmp(test_suite, "tui") == 0)
+		ret = Do_ADBG_RunSuite(&ADBG_Suite_XTEST_TUI, argc - optind,
+					(argv + optind));
 	else {
 		fprintf(stderr, "No test suite found: %s\n", test_suite);
 		ret = -1;

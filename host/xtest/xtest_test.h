@@ -98,6 +98,12 @@ ADBG_CASE_DECLARE(XTEST_TEE_BENCHMARK_1001);
 ADBG_CASE_DECLARE(XTEST_TEE_BENCHMARK_1002);
 ADBG_CASE_DECLARE(XTEST_TEE_BENCHMARK_1003);
 
+ADBG_CASE_DECLARE(XTEST_TUI_1001);
+ADBG_CASE_DECLARE(XTEST_TUI_1002);
+ADBG_CASE_DECLARE(XTEST_TUI_1003);
+ADBG_CASE_DECLARE(XTEST_TUI_1004);
+ADBG_CASE_DECLARE(XTEST_TUI_1005);
+
 #ifdef WITH_GP_TESTS
 #include "adbg_case_declare.h"
 ADBG_CASE_DECLARE_AUTO_GENERATED_TESTS()
@@ -208,6 +214,7 @@ extern const TEEC_UUID gp_tta_time_uuid;
 extern const TEEC_UUID concurrent_ta_uuid;
 extern const TEEC_UUID concurrent_large_ta_uuid;
 extern const TEEC_UUID storage_benchmark_ta_uuid;
+extern const TEEC_UUID tui_ta_uuid;
 extern char *_device;
 
 #endif /*XTEST_TEST_H*/
