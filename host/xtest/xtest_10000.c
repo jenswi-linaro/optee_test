@@ -18,6 +18,8 @@
 #include <utee_defines.h>
 #include <string.h>
 #include <enc_fs_key_manager_test.h>
+#include <conf.h>
+#include <util.h>
 
 #define WITH_HKDF 1
 #define WITH_CONCAT_KDF 1
@@ -342,6 +344,147 @@ static const uint8_t pbkdf2_6_dkm[] = {
 	0xcc, 0x37, 0xd7, 0xf0, 0x34, 0x25, 0xe0, 0xc3
 };
 
+/*
+ * Scrypt test data from
+ * https://tools.ietf.org/html/draft-josefsson-scrypt-kdf-00
+ */
+
+/*
+ *  scrypt (P="", S="",
+ *           r=16, N=1, p=1, dklen=64) =
+ *   77 d6 57 62 38 65 7b 20 3b 19 ca 42 c1 8a 04 97
+ *   f1 6b 48 44 e3 07 4a e8 df df fa 3f ed e2 14 42
+ *   fc d0 06 9d ed 09 48 f8 32 6a 75 3a 0f c8 1f 17
+ *   e8 d3 e0 fb 2e 0d 36 28 cf 35 e2 0c 38 d1 89 06
+ */
+
+/* Using 2496 bytes of working memory */
+static const uint8_t scrypt_1_passwd[] = "";
+#define scrypt_1_passwd_size	(sizeof(scrypt_1_passwd) - 1)
+#define scrypt_1_salt		NULL
+#define scrypt_1_salt_size	0
+#define scrypt_1_N		16
+#define scrypt_1_r		1
+#define scrypt_1_p		1
+static const uint8_t scrypt_1_dk[] = {
+	0x77, 0xd6, 0x57, 0x62, 0x38, 0x65, 0x7b, 0x20,
+	0x3b, 0x19, 0xca, 0x42, 0xc1, 0x8a, 0x04, 0x97,
+	0xf1, 0x6b, 0x48, 0x44, 0xe3, 0x07, 0x4a, 0xe8,
+	0xdf, 0xdf, 0xfa, 0x3f, 0xed, 0xe2, 0x14, 0x42,
+	0xfc, 0xd0, 0x06, 0x9d, 0xed, 0x09, 0x48, 0xf8,
+	0x32, 0x6a, 0x75, 0x3a, 0x0f, 0xc8, 0x1f, 0x17,
+	0xe8, 0xd3, 0xe0, 0xfb, 0x2e, 0x0d, 0x36, 0x28,
+	0xcf, 0x35, 0xe2, 0x0c, 0x38, 0xd1, 0x89, 0x06,
+};
+
+/*
+ * Scrypt test data generated with:
+ * scrypt_vectors.py --passwd "letmein" --salt "12345" --N 16 --r 1 --p 1 \
+ *		     --dklen 64
+ */
+
+/* Using 2496 bytes of working memory */
+static const uint8_t scrypt_2_passwd[] = "letmein";
+#define scrypt_2_passwd_size	(sizeof(scrypt_2_passwd) - 1)
+static const uint8_t scrypt_2_salt[] = "12345";
+#define scrypt_2_salt_size	(sizeof(scrypt_2_salt) - 1)
+#define scrypt_2_N		16
+#define scrypt_2_r		1
+#define scrypt_2_p		1
+static const uint8_t scrypt_2_dk[] = {
+	0xbe, 0xb9, 0x85, 0xbc, 0xce, 0xe1, 0xf9, 0x03,
+	0x6f, 0x9b, 0x96, 0x10, 0x6b, 0x2c, 0xa7, 0xab,
+	0x96, 0xb4, 0x10, 0xe3, 0x41, 0x99, 0xaa, 0x44,
+	0x09, 0x07, 0x93, 0xb0, 0xda, 0x06, 0x7b, 0x90,
+	0x76, 0x19, 0xa7, 0x19, 0xe2, 0xb6, 0x7c, 0x21,
+	0x9f, 0xd7, 0xfe, 0xea, 0xf7, 0x69, 0x2e, 0x5d,
+	0xfe, 0x92, 0x64, 0x61, 0xf2, 0xe7, 0xca, 0x32,
+	0x0d, 0x71, 0x45, 0x8a, 0xca, 0x31, 0x6e, 0x0a,
+};
+
+/*
+ * Scrypt test data generated with:
+ * scrypt_vectors.py --passwd "letmein" --salt "12345" --N 16 --r 1 --p 8 \
+ *		     --dklen 64
+ */
+
+/* Using 3392 bytes of working memory */
+static const uint8_t scrypt_3_passwd[] = "letmein";
+#define scrypt_3_passwd_size	(sizeof(scrypt_3_passwd) - 1)
+static const uint8_t scrypt_3_salt[] = "12345";
+#define scrypt_3_salt_size	(sizeof(scrypt_3_salt) - 1)
+#define scrypt_3_N		16
+#define scrypt_3_r		1
+#define scrypt_3_p		8
+static const uint8_t scrypt_3_dk[] = {
+	0x1c, 0xf1, 0x38, 0x43, 0x5c, 0xd6, 0x21, 0xd2,
+	0xfb, 0xdd, 0xe0, 0xb6, 0x45, 0xff, 0xfe, 0xf1,
+	0x0a, 0x2c, 0xa0, 0x98, 0xb2, 0xf6, 0xd2, 0x96,
+	0x49, 0x9b, 0x38, 0x54, 0x27, 0xfb, 0xf5, 0xff,
+	0x9d, 0x55, 0x37, 0x4d, 0x6a, 0xb8, 0x85, 0x3a,
+	0x6b, 0x64, 0xea, 0xe0, 0xfe, 0x34, 0x8f, 0xca,
+	0x8b, 0x75, 0xb0, 0x59, 0xcd, 0x90, 0x33, 0x9a,
+	0x06, 0x12, 0xa8, 0xc3, 0xdf, 0x44, 0x0c, 0xd4,
+};
+
+/*
+ * Scrypt test data generated with:
+ * scrypt_vectors.py --passwd "letmein" --salt "12345" --N 16 --r 4 --p 8 \
+ *		     --dklen 64
+ */
+
+/* Using 13376 bytes of working memory */
+static const uint8_t scrypt_4_passwd[] = "letmein";
+#define scrypt_4_passwd_size	(sizeof(scrypt_4_passwd) - 1)
+static const uint8_t scrypt_4_salt[] = "12345";
+#define scrypt_4_salt_size	(sizeof(scrypt_4_salt) - 1)
+#define scrypt_4_N		16
+#define scrypt_4_r		4
+#define scrypt_4_p		8
+static const uint8_t scrypt_4_dk[] = {
+	0xe0, 0x53, 0x53, 0x48, 0xd8, 0x87, 0xf9, 0xb5,
+	0x15, 0xd1, 0x1a, 0xbb, 0x12, 0x9c, 0xf1, 0x84,
+	0xd2, 0x82, 0x93, 0x2a, 0x9a, 0x03, 0x7c, 0xd1,
+	0x8f, 0x22, 0x31, 0x4d, 0xc2, 0x3e, 0x01, 0x63,
+	0xc3, 0x28, 0x1e, 0x2c, 0xc7, 0xf2, 0x29, 0xb6,
+	0x82, 0x0f, 0x42, 0xe7, 0x19, 0x70, 0x56, 0x4d,
+	0x8e, 0x63, 0x1f, 0xf2, 0x22, 0xd5, 0x7f, 0x31,
+	0xd9, 0xa7, 0x77, 0x39, 0xdb, 0xb0, 0x52, 0x14,
+};
+
+/*
+ * Scrypt test data generated with:
+ * scrypt_vectors.py --passwd "mypassword" --salt "mysalt" --N 4 --r 29 --p 1 \
+ *		     --dklen 128
+ */
+
+/* Using 26048 bytes of working memory */
+static const uint8_t scrypt_5_passwd[] = "mypassword";
+#define scrypt_5_passwd_size	(sizeof(scrypt_5_passwd) - 1)
+static const uint8_t scrypt_5_salt[] = "mysalt";
+#define scrypt_5_salt_size	(sizeof(scrypt_5_salt) - 1)
+#define scrypt_5_N		4
+#define scrypt_5_r		29
+#define scrypt_5_p		1
+static const uint8_t scrypt_5_dk[] = {
+	0x62, 0x15, 0x6d, 0xc2, 0xbb, 0xc6, 0xc1, 0x93,
+	0xf5, 0xde, 0x0a, 0x6b, 0xaf, 0xa9, 0x59, 0x5d,
+	0x9f, 0xdd, 0x35, 0x17, 0x01, 0xba, 0xe0, 0xf4,
+	0x62, 0xf9, 0x0a, 0x53, 0x67, 0xe1, 0x74, 0x0a,
+	0x5a, 0xf5, 0xe9, 0x01, 0xe3, 0x3d, 0x5b, 0x08,
+	0x17, 0x25, 0xc6, 0xf2, 0x4d, 0x8c, 0xf2, 0x74,
+	0xca, 0x4d, 0x6d, 0x93, 0x92, 0x8b, 0x70, 0xbd,
+	0x42, 0x87, 0x65, 0x84, 0x12, 0x29, 0xcb, 0x69,
+	0x33, 0xb6, 0x6b, 0x39, 0x17, 0x2d, 0xf4, 0x96,
+	0xfa, 0xef, 0x64, 0x92, 0xd2, 0x0a, 0x5b, 0x63,
+	0x86, 0xd0, 0x4c, 0x3a, 0xfa, 0xda, 0x26, 0x9e,
+	0xda, 0x88, 0x6b, 0x33, 0xc0, 0x2d, 0xdb, 0x45,
+	0x9d, 0xce, 0x5f, 0x11, 0x49, 0x60, 0xe5, 0xfb,
+	0xcd, 0xd1, 0xb8, 0x9f, 0x38, 0xf4, 0x1a, 0x72,
+	0x71, 0x09, 0x46, 0xdb, 0xa0, 0x93, 0x5c, 0xad,
+	0x17, 0xb2, 0x33, 0x1e, 0xa1, 0x9b, 0xed, 0x96,
+};
+
 #ifdef WITH_HKDF
 static void xtest_test_derivation_hkdf(ADBG_Case_t *c, TEEC_Session *session)
 {
@@ -610,8 +753,6 @@ static void xtest_test_derivation_pbkdf2(ADBG_Case_t *c, TEEC_Session *session)
 		pbkdf2_##id##_iteration_count, \
 		pbkdf2_##id##_dkm, sizeof(pbkdf2_##id##_dkm), \
 	}
-#define _TO_STR(n) #n
-#define TO_STR(n) _TO_STR(n)
 #define RFC6070_TEST(n) \
 	TEST_PBKDF2_DATA("RFC 6070 " TO_STR(n) " (HMAC-SHA1)", \
 			 TEE_ALG_PBKDF2_HMAC_SHA1_DERIVE_KEY, n, false)
@@ -727,6 +868,133 @@ out:
 }
 #endif /* WITH_PBKDF2 */
 
+
+#ifdef CFG_CRYPTO_SCRYPT
+static void xtest_test_derivation_scrypt(ADBG_Case_t *c, TEEC_Session *session)
+{
+	size_t n;
+#define TEST_SCRYPT_DATA(_id)\
+	{ \
+		.id = _id, \
+		.passwd = scrypt_##_id##_passwd, \
+		.passwd_size = scrypt_##_id##_passwd_size, \
+		.salt = scrypt_##_id##_salt, \
+		.salt_size = scrypt_##_id##_salt_size, \
+		.dk = scrypt_##_id##_dk, \
+		.dk_size = sizeof(scrypt_##_id##_dk), \
+		.N = scrypt_##_id##_N, \
+		.r = scrypt_##_id##_r, \
+		.p = scrypt_##_id##_p, \
+	}
+	static struct scrypt_case {
+		size_t id;
+		const uint8_t *passwd;
+		size_t passwd_size;
+		const uint8_t *salt;
+		size_t salt_size;
+		const uint8_t *dk;
+		size_t dk_size;
+		size_t N;
+		size_t r;
+		size_t p;
+	} scrypt_cases[] = {
+		TEST_SCRYPT_DATA(1),
+		TEST_SCRYPT_DATA(2),
+		TEST_SCRYPT_DATA(3),
+		TEST_SCRYPT_DATA(4),
+		TEST_SCRYPT_DATA(5),
+	};
+
+	for (n = 0; n < ARRAY_SIZE(scrypt_cases); n++) {
+		TEE_OperationHandle op;
+		TEE_ObjectHandle key_handle;
+		TEE_ObjectHandle sv_handle;
+		TEE_Attribute attrs[6];
+		size_t attr_count = 0;
+		uint8_t out[2048];
+		size_t out_size;
+		size_t max_size = 2048;
+		const struct scrypt_case *sc = scrypt_cases + n;
+
+		Do_ADBG_BeginSubCase(c, "Scrypt vector %zu", sc->id);
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_allocate_operation(c, session, &op,
+				TEE_ALG_SCRYPT_DERIVE_KEY, TEE_MODE_DERIVE,
+				max_size)))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_allocate_transient_object(c, session,
+				TEE_TYPE_SCRYPT, max_size, &key_handle)))
+			goto out;
+
+		xtest_add_attr(&attr_count, attrs, TEE_ATTR_SCRYPT_PASSWORD,
+			       sc->passwd, sc->passwd_size);
+		xtest_add_attr_value(&attr_count, attrs, TEE_ATTR_SCRYPT_N,
+				     sc->N, 0);
+		xtest_add_attr_value(&attr_count, attrs, TEE_ATTR_SCRYPT_R,
+				     sc->r, 0);
+		xtest_add_attr_value(&attr_count, attrs, TEE_ATTR_SCRYPT_P,
+				     sc->p, 0);
+
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_populate_transient_object(c, session,
+				key_handle, attrs, attr_count)))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_set_operation_key(c, session, op,
+						       key_handle)))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_free_transient_object(c, session,
+							   key_handle)))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_allocate_transient_object(c, session,
+				TEE_TYPE_GENERIC_SECRET, sc->dk_size * 8,
+				&sv_handle)))
+			goto out;
+
+		attr_count = 0;
+		if (sc->salt)
+			xtest_add_attr(&attr_count, attrs, TEE_ATTR_SCRYPT_SALT,
+				       sc->salt, sc->salt_size);
+		xtest_add_attr_value(&attr_count, attrs,
+				     TEE_ATTR_SCRYPT_DK_LENGTH, sc->dk_size, 0);
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_derive_key(c, session, op, sv_handle,
+						attrs, attr_count)))
+			goto out;
+
+		out_size = sizeof(out);
+		memset(out, 0, sizeof(out));
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_get_object_buffer_attribute(c, session,
+				sv_handle, TEE_ATTR_SECRET_VALUE, out, &out_size)))
+			goto out;
+
+		if (!ADBG_EXPECT_BUFFER(c, sc->dk, sc->dk_size, out, out_size))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_free_operation(c, session, op)))
+			goto out;
+
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c,
+			ta_crypt_cmd_free_transient_object(c, session,
+							   sv_handle)))
+			goto out;
+out:
+		Do_ADBG_EndSubCase(c, "Scrypt vector %zu", sc->id);
+	}
+}
+#endif /* CFG_CRYPTO_SCRYPT */
+
 static TEEC_Result enc_fs_km_self_test(TEEC_Session *sess)
 {
 	TEEC_Operation op;
@@ -756,6 +1024,9 @@ static void xtest_tee_test_10001(ADBG_Case_t *c)
 #endif
 #ifdef WITH_PBKDF2
 	xtest_test_derivation_pbkdf2(c, &session);
+#endif
+#ifdef CFG_CRYPTO_SCRYPT
+	xtest_test_derivation_scrypt(c, &session);
 #endif
 
 	TEEC_CloseSession(&session);
