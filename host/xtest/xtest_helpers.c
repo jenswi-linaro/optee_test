@@ -11,10 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#include <assert.h>
-#include <err.h>
 #include <malloc.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <ta_crypt.h>
@@ -44,6 +41,15 @@ TEEC_Result xtest_teec_open_session(TEEC_Session *session,
 void xtest_teec_ctx_deinit(void)
 {
 	TEEC_FinalizeContext(&xtest_teec_ctx);
+}
+
+static TEEC_Result handle_to_u32(void *o, uint32_t *v)
+{
+	*v = (uintptr_t)o;
+	if (*v == (uintptr_t)o)
+		return TEEC_SUCCESS;
+	else
+		return TEEC_ERROR_BAD_PARAMETERS;
 }
 
 TEEC_Result ta_crypt_cmd_allocate_operation(ADBG_Case_t *c, TEEC_Session *s,
@@ -212,8 +218,9 @@ TEEC_Result ta_crypt_cmd_populate_transient_object(ADBG_Case_t *c,
 	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
 		return res;
 
-	assert((uintptr_t)o <= UINT32_MAX);
-	op.params[0].value.a = (uint32_t)(uintptr_t)o;
+	res = handle_to_u32(o, &op.params[0].value.a);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto out;
 
 	op.params[1].tmpref.buffer = buf;
 	op.params[1].tmpref.size = blen;
@@ -230,6 +237,7 @@ TEEC_Result ta_crypt_cmd_populate_transient_object(ADBG_Case_t *c,
 						    ret_orig);
 	}
 
+out:
 	free(buf);
 	return res;
 }
@@ -242,11 +250,13 @@ TEE_Result ta_crypt_cmd_set_operation_key(ADBG_Case_t *c, TEEC_Session *s,
 	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
 	uint32_t ret_orig;
 
-	assert((uintptr_t)oph <= UINT32_MAX);
-	op.params[0].value.a = (uint32_t)(uintptr_t)oph;
+	res = handle_to_u32(oph, &op.params[0].value.a);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		return res;
 
-	assert((uintptr_t)key <= UINT32_MAX);
-	op.params[0].value.b = (uint32_t)(uintptr_t)key;
+	res = handle_to_u32(key, &op.params[0].value.b);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		return res;
 
 	op.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_INPUT, TEEC_NONE, TEEC_NONE,
 					 TEEC_NONE);
@@ -269,8 +279,9 @@ TEEC_Result ta_crypt_cmd_free_transient_object(ADBG_Case_t *c, TEEC_Session *s,
 	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
 	uint32_t ret_orig;
 
-	assert((uintptr_t)o <= UINT32_MAX);
-	op.params[0].value.a = (uint32_t)(uintptr_t)o;
+	res = handle_to_u32(o, &op.params[0].value.a);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		return res;
 	op.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_INPUT, TEEC_NONE, TEEC_NONE,
 					 TEEC_NONE);
 
@@ -301,11 +312,13 @@ TEEC_Result ta_crypt_cmd_derive_key(ADBG_Case_t *c, TEEC_Session *s,
 	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
 		return res;
 
-	assert((uintptr_t)oph <= UINT32_MAX);
-	op.params[0].value.a = (uint32_t)(uintptr_t)oph;
+	res = handle_to_u32(oph, &op.params[0].value.a);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto out;
 
-	assert((uintptr_t)o <= UINT32_MAX);
-	op.params[0].value.b = (uint32_t)(uintptr_t)o;
+	res = handle_to_u32(o, &op.params[0].value.b);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto out;
 
 	op.params[1].tmpref.buffer = buf;
 	op.params[1].tmpref.size = blen;
@@ -321,6 +334,7 @@ TEEC_Result ta_crypt_cmd_derive_key(ADBG_Case_t *c, TEEC_Session *s,
 						    ret_orig);
 	}
 
+out:
 	free(buf);
 	return res;
 }
@@ -335,8 +349,9 @@ TEEC_Result ta_crypt_cmd_get_object_buffer_attribute(ADBG_Case_t *c,
 	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
 	uint32_t ret_orig;
 
-	assert((uintptr_t)o <= UINT32_MAX);
-	op.params[0].value.a = (uint32_t)(uintptr_t)o;
+	res = handle_to_u32(o, &op.params[0].value.a);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		return res;
 	op.params[0].value.b = attr_id;
 
 	op.params[1].tmpref.buffer = buf;
@@ -382,6 +397,10 @@ TEEC_Result ta_crypt_cmd_free_operation(ADBG_Case_t *c, TEEC_Session *s,
 
 	return res;
 }
+
+#ifndef __UBOOT__
+#include <err.h>
+#include <pthread.h>
 
 void xtest_mutex_init(pthread_mutex_t *mutex)
 {
@@ -439,3 +458,4 @@ int xtest_barrier_wait(pthread_barrier_t *barrier)
 		errx(1, "pthread _barrier_wait: %s", strerror(e));
 	return e;
 }
+#endif

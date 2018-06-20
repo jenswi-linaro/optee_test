@@ -15,7 +15,9 @@
 #define XTEST_HELPERS_H
 
 #include <adbg.h>
+#ifndef __UBOOT__
 #include <pthread.h>
+#endif
 #include <tee_api_types.h>
 #include <tee_client_api.h>
 
@@ -102,6 +104,7 @@ void xtest_add_attr_value(size_t *attr_count, TEE_Attribute *attrs,
 TEE_Result pack_attrs(const TEE_Attribute *attrs, uint32_t attr_count,
 			     uint8_t **buf, size_t *blen);
 
+#ifndef __UBOOT__
 void xtest_mutex_init(pthread_mutex_t *mutex);
 void xtest_mutex_destroy(pthread_mutex_t *mutex);
 void xtest_mutex_lock(pthread_mutex_t *mutex);
@@ -110,5 +113,6 @@ void xtest_mutex_unlock(pthread_mutex_t *mutex);
 void xtest_barrier_init(pthread_barrier_t *barrier, unsigned count);
 void xtest_barrier_destroy(pthread_barrier_t *barrier);
 int xtest_barrier_wait(pthread_barrier_t *barrier);
+#endif
 
 #endif /*XTEST_HELPERS_H*/

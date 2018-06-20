@@ -15,7 +15,11 @@
 
 #include <stdlib.h>
 
+#ifdef __UBOOT__
+#include <linux/ctype.h>
+#else
 #include <ctype.h>
+#endif
 /*************************************************************************
  * 2. Definition of external constants and variables
  ************************************************************************/
@@ -49,7 +53,9 @@ void Do_ADBG_Log(const char *const Format, ...)
 	vprintf(Format, ap);
 	printf("\n");
 	va_end(ap);
+#ifndef __UBOOT__
 	fflush(stdout);
+#endif
 }
 
 void Do_ADBG_HexLog(

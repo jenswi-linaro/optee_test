@@ -14,9 +14,11 @@
 /*************************************************************************
 * 1. Includes
 *************************************************************************/
-#include <sys/param.h>
+#ifdef __UBOOT__
+#include <linux/types.h>
+#else
 #include <stdint.h>
-#include <stdint.h>
+#endif
 #include <string.h>
 
 #include "security_utils_hex.h"

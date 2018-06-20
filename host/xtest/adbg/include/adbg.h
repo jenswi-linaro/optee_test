@@ -16,7 +16,12 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
+#include <inttypes.h>
+#ifdef __UBOOT__
+#include <vsprintf.h>
+#else
+#include <stdio.h>
+#endif
 #include <sys/queue.h>
 
 #define ADBG_STRING_LENGTH_MAX (1024)
@@ -53,6 +58,14 @@ typedef struct adbg_suite_def {
 	struct adbg_case_def_head cases;
 } ADBG_Suite_Definition_t;
 
+#ifdef __UBOOT__
+#define ADBG_CASE_DEFINE(Suite, TestID, Run, Title) \
+	ll_entry_declare(struct adbg_case_def, TestID, Suite) = { \
+		.TestID_p = #Suite "_" #TestID, \
+		.Title_p = Title, \
+		.Run_fp = Run, \
+	}
+#else
 #define ADBG_CASE_DEFINE(Suite, TestID, Run, Title) \
 	__attribute__((constructor)) static void \
 	__adbg_test_case_ ## TestID(void) \
@@ -66,6 +79,7 @@ typedef struct adbg_suite_def {
 		TAILQ_INSERT_TAIL(&(ADBG_Suite_ ## Suite).cases, \
 				 &case_def, link); \
 	}
+#endif
 
 /*
  * Suite definitions

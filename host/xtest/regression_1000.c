@@ -10,7 +10,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-
+#ifdef __UBOOT__
+#include <stdio.h>
+#include <stdlib.h>
+#else
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -19,11 +22,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 
 #include "xtest_test.h"
 #include "xtest_helpers.h"
 #include <signed_hdr.h>
+#ifndef __UBOOT__
 #include <util.h>
+#endif
 
 #include <pta_invoke_tests.h>
 #include <ta_crypt.h>
@@ -32,7 +38,9 @@
 #include <ta_rpc_test.h>
 #include <ta_sims_test.h>
 #include <ta_concurrent.h>
+#ifndef __UBOOT__
 #include <sdp_basic.h>
+#endif
 #ifdef CFG_SECSTOR_TA_MGMT_PTA
 #include <pta_secstor_ta_mgmt.h>
 #endif
@@ -290,6 +298,7 @@ out:
 }
 ADBG_CASE_DEFINE(regression, 1002, xtest_tee_test_1002, "PTA parameters");
 
+#ifndef __UBOOT__
 struct test_1003_arg {
 	uint32_t test_type;
 	size_t repeat;
@@ -427,6 +436,7 @@ static void xtest_tee_test_1003(ADBG_Case_t *c)
 }
 ADBG_CASE_DEFINE(regression, 1003, xtest_tee_test_1003,
 		 "Core internal read/write mutex");
+#endif /*__UBOOT__*/
 
 static void xtest_tee_test_1004(ADBG_Case_t *c)
 {
@@ -763,6 +773,7 @@ static void xtest_tee_test_1008(ADBG_Case_t *c)
 ADBG_CASE_DEFINE(regression, 1008, xtest_tee_test_1008,
 		"TEE internal client API");
 
+#ifndef __UBOOT__
 static void *cancellation_thread(void *arg)
 {
 	/*
@@ -832,6 +843,7 @@ static void xtest_tee_test_1009(ADBG_Case_t *c)
 	xtest_tee_test_1009_subcase(c, "TEE Wait 2s", 2000, false);
 }
 ADBG_CASE_DEFINE(regression, 1009, xtest_tee_test_1009, "TEE Wait");
+#endif /*__UBOOT__*/
 
 static void xtest_tee_test_1010(ADBG_Case_t *c)
 {
@@ -1014,6 +1026,7 @@ static void xtest_tee_test_1012(ADBG_Case_t *c)
 ADBG_CASE_DEFINE(regression, 1012, xtest_tee_test_1012,
 		"Test Single Instance Multi Session features with SIMS TA");
 
+#ifndef __UBOOT__
 struct test_1013_thread_arg {
 	const TEEC_UUID *uuid;
 	uint32_t cmd;
@@ -1206,6 +1219,7 @@ static void xtest_tee_test_1013(ADBG_Case_t *c)
 }
 ADBG_CASE_DEFINE(regression, 1013, xtest_tee_test_1013,
 		"Test concurency with concurrent TA");
+#endif /*__UBOOT__*/
 
 #ifdef CFG_SECURE_DATA_PATH
 static void xtest_tee_test_1014(ADBG_Case_t *c)
