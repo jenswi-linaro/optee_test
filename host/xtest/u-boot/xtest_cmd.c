@@ -41,7 +41,7 @@ static int do_xtest(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	add_cases(&ADBG_Suite_regression.cases);
 
 	rc = Do_ADBG_RunSuite(&ADBG_Suite_regression,
-			      argc - 1, (void *)(argv - 1));
+			      argc - 1, (void *)(argv + 1));
 	if (rc) {
 		rc = CMD_RET_FAILURE;
 		goto out;
