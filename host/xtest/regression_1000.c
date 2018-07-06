@@ -555,6 +555,7 @@ static void xtest_tee_test_1005(ADBG_Case_t *c)
 }
 ADBG_CASE_DEFINE(regression, 1005, xtest_tee_test_1005, "Many sessions");
 
+#ifndef __UBOOT__
 static void xtest_tee_test_1006(ADBG_Case_t *c)
 {
 	TEEC_Session session = { 0 };
@@ -580,6 +581,7 @@ static void xtest_tee_test_1006(ADBG_Case_t *c)
 }
 ADBG_CASE_DEFINE(regression, 1006, xtest_tee_test_1006,
 		"Test Basic OS features");
+#endif /*__UBOOT__*/
 
 static void xtest_tee_test_1007(ADBG_Case_t *c)
 {
