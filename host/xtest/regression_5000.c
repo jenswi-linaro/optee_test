@@ -331,9 +331,10 @@ static void InitializeContext_NotExistingTEE(struct xtest_session *cs)
 {
 	Do_ADBG_BeginSubCase(cs->c, "InitializeContext_NotExistingTEE");
 	{
-		if (!ADBG_EXPECT_COMPARE_UNSIGNED(cs->c, TEEC_SUCCESS, !=,
-			TEEC_InitializeContext("Invalid TEE name",
-					       &cs->context)))
+		TEEC_Result res;
+
+		res = TEEC_InitializeContext("Invalid TEE name", &cs->context);
+		if (!ADBG_EXPECT_COMPARE_UNSIGNED(cs->c, TEEC_SUCCESS, !=, res))
 			TEEC_FinalizeContext(&cs->context);
 	}
 	Do_ADBG_EndSubCase(cs->c, "InitializeContext_NotExistingTEE");
