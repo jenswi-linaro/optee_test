@@ -11,11 +11,16 @@
  * GNU General Public License for more details.
  */
 
+#ifdef __UBOOT__
+#include <stdio.h>
+#include <stdlib.h>
+#else
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 
 #include "xtest_test.h"
 #include "xtest_helpers.h"
