@@ -55,12 +55,19 @@ test_plugin:
 			     --no-builtin-variables \
 			     O=$(out-dir)
 
+.PHONY: tpm_plugin
+tpm_plugin:
+	$(q)$(MAKE) -C host/tpm_plugin CROSS_COMPILE="$(CROSS_COMPILE_HOST)" \
+			     --no-builtin-variables \
+			     O=$(out-dir)
+
 .PHONY: clean
 ifneq ($(wildcard $(TA_DEV_KIT_DIR)/host_include/conf.mk),)
 clean:
 	$(q)$(MAKE) -C host/xtest O=$(out-dir) $@
 	$(q)$(MAKE) -C ta O=$(out-dir) $@
 	$(q)$(MAKE) -C host/supp_plugin O=$(out-dir) $@
+	$(q)$(MAKE) -C host/tpm_plugin O=$(out-dir) $@
 else
 clean:
 	$(q)echo "TA_DEV_KIT_DIR is not correctly defined"
@@ -86,6 +93,7 @@ install:
 	$(echo) '  INSTALL ${DESTDIR}/$(CFG_TEE_PLUGIN_LOAD_PATH)'
 	$(q)mkdir -p ${DESTDIR}/$(CFG_TEE_PLUGIN_LOAD_PATH)
 	$(q)cp $(out-dir)/supp_plugin/*.plugin ${DESTDIR}/$(CFG_TEE_PLUGIN_LOAD_PATH)
+	$(q)cp $(out-dir)/tpm_plugin/*.plugin ${DESTDIR}/$(CFG_TEE_PLUGIN_LOAD_PATH)
 
 .PHONY: cscope
 cscope:
