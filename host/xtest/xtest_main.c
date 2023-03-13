@@ -27,6 +27,7 @@
 #include "crypto_common.h"
 #include "install_ta.h"
 #include "stats.h"
+#include "tpm_cmd.h"
 
 
 ADBG_SUITE_DEFINE(benchmark);
@@ -169,6 +170,8 @@ int main(int argc, char *argv[])
 #endif
 	else if (argc > 1 && !strcmp(argv[1], "--stats"))
 		return stats_runner_cmd_parser(argc - 1, &argv[1]);
+	else if (argc > 1 && !strcmp(argv[1], "--tpm"))
+		return tpm_cmd(argc - 1, argv + 1);
 
 	while ((opt = getopt(argc, argv, "d:l:t:h")) != -1) {
 		switch (opt) {

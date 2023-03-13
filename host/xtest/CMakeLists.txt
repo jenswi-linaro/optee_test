@@ -57,6 +57,7 @@ set (SRC
 	regression_8100.c
 	hash_perf.c
 	stats.c
+	tpm_cmd.c
 	xtest_helpers.c
 	xtest_main.c
 	xtest_test.c
