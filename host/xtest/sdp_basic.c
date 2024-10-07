@@ -5,6 +5,7 @@
  */
 
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <pta_invoke_tests.h>
 #include <stdio.h>
@@ -132,37 +133,6 @@ static int create_tee_ctx(struct tee_ctx *ctx, enum test_target_ta target_ta)
 		TEEC_FinalizeContext(&ctx->ctx);
 	}
 	return (teerc == TEEC_SUCCESS) ? 0 : -1;
-}
-
-static int tee_register_buffer(struct tee_ctx *ctx, void **shm_ref, int fd)
-{
-	TEEC_Result teerc = TEEC_ERROR_GENERIC;
-	TEEC_SharedMemory *shm = malloc(sizeof(*shm));
-
-	if (!shm)
-		return 1;
-
-	shm->flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-	teerc = TEEC_RegisterSharedMemoryFileDescriptor(&ctx->ctx, shm, fd);
-	if (teerc != TEEC_SUCCESS) {
-		fprintf(stderr, "Error: TEEC_RegisterMemoryFileDescriptor() failed %x\n",
-			teerc);
-		return 1;
-	}
-
-	*shm_ref = shm;
-	return 0;
-}
-
-static void tee_deregister_buffer(struct tee_ctx *ctx, void *shm_ref)
-{
-	(void)ctx;
-
-	if (!shm_ref)
-		return;
-
-	TEEC_ReleaseSharedMemory((TEEC_SharedMemory *)shm_ref);
-	free(shm_ref);
 }
 
 static int inject_sdp_data(struct tee_ctx *ctx,
@@ -371,12 +341,12 @@ static int get_random_bytes(char *out, size_t len)
 int sdp_basic_test(enum test_target_ta ta, size_t size, size_t loop,
 		   const char *heap_name, int rnd_offset, int verbosity)
 {
+	TEEC_Result res;
 	struct tee_ctx *ctx = NULL;
 	unsigned char *test_buf = NULL;
 	unsigned char *ref_buf = NULL;
-	void *shm_ref = NULL;
+	TEEC_SharedMemory shm = { };
 	unsigned int err = 1;
-	int fd = -1;
 	size_t sdp_size = size;
 	size_t offset = 0;
 	size_t loop_cnt = 0;
@@ -394,65 +364,64 @@ int sdp_basic_test(enum test_target_ta ta, size_t size, size_t loop,
 	ref_buf = malloc(size);
 	if (!test_buf || !ref_buf) {
 		verbose("failed to allocate memory\n");
-		goto bail1;
+		goto out_free;
 	}
 
-	fd = allocate_buffer(sdp_size, heap_name, verbosity);
-	if (fd < 0) {
-		verbose("Failed to allocate SDP buffer (%zu bytes) in %s: %d\n",
-				sdp_size, heap_name, fd);
-		goto bail1;
-	}
-
-	/* register secure buffer to TEE */
 	ctx = malloc(sizeof(*ctx));
 	if (!ctx)
-		goto bail1;
+		goto out_free;
 	if (create_tee_ctx(ctx, ta))
-		goto bail1;
-	if (tee_register_buffer(ctx, &shm_ref, fd))
-		goto bail2;
-
-	/* release registered fd: tee should still hold refcount on resource */
-	close(fd);
-	fd = -1;
+		goto out_free;
+	shm.size = sdp_size;
+	shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+	res = TEEC_AllocateRestrictedMemory(&ctx->ctx, &shm,
+					    TEEC_USE_CASE_SECURE_VIDEO_PLAY);
+	if (res) {
+		verbose("Failed to allocate SDP buffer (%zu bytes)\n",
+				sdp_size);
+		goto out_finalize_ctx;
+	}
 
 	/* invoke trusted application with secure buffer as memref parameter */
 	for (loop_cnt = loop; loop_cnt; loop_cnt--) {
 		/* get an buffer of random-like values */
 		if (get_random_bytes((char *)ref_buf, size))
-			goto bail2;
+			goto out_rel_shm;
 		memcpy(test_buf, ref_buf, size);
 		/* random offset [0 255] */
 		offset = (unsigned int)*ref_buf;
 
 		/* TA writes into SDP buffer */
-		if (inject_sdp_data(ctx, test_buf, offset, size, shm_ref, ta))
-			goto bail2;
+		if (inject_sdp_data(ctx, test_buf, offset, size, &shm, ta)) {
+			fprintf(stderr, "err1\n");
+			goto out_rel_shm;
+		}
 
 		/* TA reads/writes into SDP buffer */
-		if (transform_sdp_data(ctx, offset, size, shm_ref, ta))
-			goto bail2;
+		if (transform_sdp_data(ctx, offset, size, &shm, ta)) {
+			fprintf(stderr, "err2\n");
+			goto out_rel_shm;
+		}
 
 		/* TA reads into SDP buffer */
-		if (dump_sdp_data(ctx, test_buf, offset, size, shm_ref, ta))
-			goto bail2;
+		if (dump_sdp_data(ctx, test_buf, offset, size, &shm, ta)) {
+			fprintf(stderr, "err3\n");
+			goto out_rel_shm;
+		}
 
 		/* check dumped data are the expected ones */
 		if (check_sdp_dumped(ctx, ref_buf, size, test_buf)) {
 			fprintf(stderr, "check SDP data: %d errors\n", err);
-			goto bail2;
+			goto out_rel_shm;
 		}
 	}
 
 	err = 0;
-bail2:
-	if (fd >= 0)
-		close(fd);
-	if (shm_ref)
-		tee_deregister_buffer(ctx, shm_ref);
+out_rel_shm:
+	TEEC_ReleaseSharedMemory(&shm);
+out_finalize_ctx:
 	finalize_tee_ctx(ctx);
-bail1:
+out_free:
 	free(ctx);
 	free(ref_buf);
 	free(test_buf);
@@ -517,14 +486,14 @@ int sdp_out_of_bounds_memref_test(size_t size, const char *heap_name,
 {
 	struct tee_ctx ctx = { };
 	int err = 0;
-	int fd = -1;
 	TEEC_Result teerc = TEEC_ERROR_GENERIC;
 	TEEC_SharedMemory in = { };
-	TEEC_SharedMemory *out = NULL;
+	TEEC_SharedMemory out = { };
 
 	if (create_tee_ctx(&ctx, TEST_NS_TO_TA))
 		return -1;
 
+#if 0
 	fd = allocate_buffer(size, heap_name, verbosity);
 	if (fd < 0) {
 		verbose("SDP alloc failed (%zu bytes) in %s: %d\n",
@@ -536,12 +505,22 @@ int sdp_out_of_bounds_memref_test(size_t size, const char *heap_name,
 		err = 1;
 		goto bail;
 	}
+#else
+	out.size = size;
+	out.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+	teerc = TEEC_AllocateRestrictedMemory(&ctx.ctx, &out,
+					      TEEC_USE_CASE_SECURE_VIDEO_PLAY);
+	if (teerc) {
+		verbose("failed to allocate memory\n");
+		goto bail;
+	}
+#endif
 
 	/*
 	 * The ION driver will decide how much SDP memory is being allocated.
 	 * Rely on this size to test out of bounds reference cases.
 	 */
-	size = out->size;
+	size = out.size;
 
 	in.size = size;
 	in.flags = TEEC_MEM_INPUT;
@@ -553,35 +532,33 @@ int sdp_out_of_bounds_memref_test(size_t size, const char *heap_name,
 
 	if (verbosity) {
 		/* Valid case: reference inside allocated buffer: last byte */
-		err += invoke_out_of_bounds(&ctx, &in, out, size - 1, 1,
+		err += invoke_out_of_bounds(&ctx, &in, &out, size - 1, 1,
 					    true, verbosity);
 	}
 
 	/* Reference overflows allocated buffer by 1 byte */
-	err += invoke_out_of_bounds(&ctx, &in, out, size - 1, 2,
+	err += invoke_out_of_bounds(&ctx, &in, &out, size - 1, 2,
 				    false, verbosity);
 
 	/* Reference oveflows allocated buffer by more than 4kB byte */
-	err += invoke_out_of_bounds(&ctx, &in, out, size - 1, 5000,
+	err += invoke_out_of_bounds(&ctx, &in, &out, size - 1, 5000,
 				    false, verbosity);
 
 	/* Offset exceeds allocated buffer size value by 1 byte */
-	err += invoke_out_of_bounds(&ctx, &in, out, size, 1,
+	err += invoke_out_of_bounds(&ctx, &in, &out, size, 1,
 				    false, verbosity);
 
 	/* Offset exceeds allocated size value by 4kByte */
-	err += invoke_out_of_bounds(&ctx, &in, out, size, 4096,
+	err += invoke_out_of_bounds(&ctx, &in, &out, size, 4096,
 				    false, verbosity);
 
 	/* Offset + size overflows offset value */
-	err += invoke_out_of_bounds(&ctx, &in, out, 2, ~0,
+	err += invoke_out_of_bounds(&ctx, &in, &out, 2, ~0,
 				    false, verbosity);
 
 	TEEC_ReleaseSharedMemory(&in);
 bail:
-	tee_deregister_buffer(&ctx, out);
-	if (fd >= 0)
-		close(fd);
+	TEEC_ReleaseSharedMemory(&out);
 	finalize_tee_ctx(&ctx);
 
 	return err;
