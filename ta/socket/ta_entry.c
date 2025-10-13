@@ -11,6 +11,7 @@
 #include <tee_isocket.h>
 #include <tee_tcpsocket.h>
 #include <tee_udpsocket.h>
+#include <tee_vsocket.h>
 #include <trace.h>
 
 TEE_Result TA_CreateEntryPoint(void)
@@ -244,7 +245,150 @@ static TEE_Result ta_entry_ioctl(uint32_t param_types, TEE_Param params[4])
 	return res;
 }
 
+static TEE_Result ta_entry_vsock_open(uint32_t param_types, TEE_Param params[4])
+{
+	uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_INPUT,
+					  TEE_PARAM_TYPE_VALUE_INPUT,
+					  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					  TEE_PARAM_TYPE_VALUE_OUTPUT);
+	TEE_vSocket_Setup setup = { };
+	TEE_Result res = TEE_SUCCESS;
+	struct sock_handle h = { };
 
+	if (param_types != exp_pt) {
+		EMSG("got param_types 0x%x, expected 0x%x",
+		     param_types, exp_pt);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (params[2].memref.size < sizeof(h)) {
+		params[2].memref.size = sizeof(h);
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	setup.port = params[1].value.a;
+	setup.listen = params[0].value.b;
+	setup.type = params[0].value.a;
+
+	h.socket = TEE_vSocket;
+	res = h.socket->open(&h.ctx, &setup, &params[3].value.a);
+	if (!res) {
+		memcpy(params[2].memref.buffer, &h, sizeof(h));
+		params[2].memref.size = sizeof(h);
+	}
+
+	return res;
+}
+
+static TEE_Result ta_entry_vsock_recv_flags(uint32_t param_types,
+					    TEE_Param params[4])
+{
+	uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+					  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					  TEE_PARAM_TYPE_VALUE_INOUT,
+					  TEE_PARAM_TYPE_NONE);
+	TEE_vSocket_Recv_Flags arg = { };
+	TEE_Result res = TEE_SUCCESS;
+	struct sock_handle *h = NULL;
+	uint32_t sz = 0;
+
+	if (param_types != exp_pt) {
+		EMSG("got param_types 0x%x, expected 0x%x",
+		     param_types, exp_pt);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (params[0].memref.size != sizeof(struct sock_handle))
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	h = params[0].memref.buffer;
+	arg.timeout = params[2].value.a;
+	arg.buf = params[1].memref.buffer;
+	arg.buf_len = params[1].memref.size;
+	sz = sizeof(arg);
+	res = h->socket->ioctl(h->ctx, TEE_VSOCK_RECV_FLAGS, &arg, &sz);
+	if (res)
+		return res;
+
+	params[1].memref.size = arg.buf_len;
+	params[2].value.b = arg.flags;
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result ta_entry_vsock_send_flags(uint32_t param_types,
+					    TEE_Param params[4])
+{
+	uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+					  TEE_PARAM_TYPE_MEMREF_INPUT,
+					  TEE_PARAM_TYPE_VALUE_INPUT,
+					  TEE_PARAM_TYPE_VALUE_OUTPUT);
+	TEE_vSocket_Send_Flags arg = { };
+	TEE_Result res = TEE_SUCCESS;
+	struct sock_handle *h = NULL;
+	uint32_t sz = 0;
+
+	if (param_types != exp_pt) {
+		EMSG("got param_types 0x%x, expected 0x%x",
+		     param_types, exp_pt);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (params[0].memref.size != sizeof(struct sock_handle))
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	h = params[0].memref.buffer;
+	arg.flags = params[2].value.b;
+	arg.timeout = params[2].value.a;
+	arg.buf = params[1].memref.buffer;
+	arg.buf_len = params[1].memref.size;
+	sz = sizeof(arg);
+	res = h->socket->ioctl(h->ctx, TEE_VSOCK_SEND_FLAGS, &arg, &sz);
+	if (!res)
+		params[3].value.a = arg.buf_len;
+
+	return res;
+}
+
+static TEE_Result ta_entry_vsock_accept(uint32_t param_types,
+					TEE_Param params[4])
+{
+	uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+					  TEE_PARAM_TYPE_VALUE_INPUT,
+					  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					  TEE_PARAM_TYPE_NONE);
+	TEE_VSocket_Accept arg = { };
+	TEE_Result res = TEE_SUCCESS;
+	struct sock_handle *h = NULL;
+	uint32_t sz = 0;
+
+	if (param_types != exp_pt) {
+		EMSG("got param_types 0x%x, expected 0x%x",
+		     param_types, exp_pt);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (params[0].memref.size != sizeof(struct sock_handle))
+		return TEE_ERROR_BAD_PARAMETERS;
+	if (params[2].memref.size < sizeof(struct sock_handle)) {
+		params[2].memref.size = sizeof(struct sock_handle);
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	h = params[0].memref.buffer;
+	arg.timeout = params[1].value.a;
+	sz = sizeof(arg);
+	res = h->socket->ioctl(h->ctx, TEE_VSOCK_ACCEPT, &arg, &sz);
+	if (!res) {
+		struct sock_handle *accept_h = params[2].memref.buffer;
+
+		accept_h->socket = TEE_vSocket,
+		accept_h->ctx = arg.accept_ctx,
+		params[2].memref.size = sizeof(*accept_h);
+	}
+
+	return res;
+}
 
 TEE_Result TA_InvokeCommandEntryPoint(void *session_ctx,
 				      uint32_t cmd_id, uint32_t param_types,
@@ -257,6 +401,8 @@ TEE_Result TA_InvokeCommandEntryPoint(void *session_ctx,
 		return ta_entry_tcp_open(param_types, params);
 	case TA_SOCKET_CMD_UDP_OPEN:
 		return ta_entry_udp_open(param_types, params);
+	case TA_SOCKET_CMD_VSOCK_OPEN:
+		return ta_entry_vsock_open(param_types, params);
 	case TA_SOCKET_CMD_CLOSE:
 		return ta_entry_close(param_types, params);
 	case TA_SOCKET_CMD_SEND:
@@ -267,6 +413,12 @@ TEE_Result TA_InvokeCommandEntryPoint(void *session_ctx,
 		return ta_entry_error(param_types, params);
 	case TA_SOCKET_CMD_IOCTL:
 		return ta_entry_ioctl(param_types, params);
+	case TA_SOCKET_CMD_VSOCK_RECV_FLAGS:
+		return ta_entry_vsock_recv_flags(param_types, params);
+	case TA_SOCKET_CMD_VSOCK_SEND_FLAGS:
+		return ta_entry_vsock_send_flags(param_types, params);
+	case TA_SOCKET_CMD_VSOCK_ACCEPT:
+		return ta_entry_vsock_accept(param_types, params);
 	default:
 		return TEE_ERROR_BAD_PARAMETERS;
 	}

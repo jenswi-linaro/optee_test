@@ -3,6 +3,9 @@
  * Copyright (c) 2016, Linaro Limited
  */
 
+#include <sys/socket.h>
+#include <linux/vm_sockets.h>
+
 #include <assert.h>
 #include <err.h>
 #include <pthread.h>
@@ -15,9 +18,10 @@
 #include <ta_socket.h>
 #include <tee_isocket.h>
 #include <tee_tcpsocket.h>
-#include <__tee_tcpsocket_defines_extensions.h>
 #include <tee_udpsocket.h>
+#include <tee_vsocket.h>
 #include <unistd.h>
+#include <__tee_tcpsocket_defines_extensions.h>
 
 #include "xtest_test.h"
 #include "xtest_helpers.h"
@@ -83,6 +87,34 @@ static TEE_Result socket_udp_open(TEEC_Session *session, uint32_t ip_vers,
 
 	res = TEEC_InvokeCommand(session, TA_SOCKET_CMD_UDP_OPEN,
 				 &op, ret_orig);
+
+	handle->blen = op.params[2].tmpref.size;
+	*error = op.params[3].value.a;
+	return res;
+}
+
+static TEE_Result socket_vsock_open(TEEC_Session *session,
+				    TEE_vSocket_Type type, uint16_t port,
+				    bool listen, struct socket_handle *handle,
+				    uint32_t *error, uint32_t *ret_orig)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
+
+	memset(handle, 0, sizeof(*handle));
+
+	op.params[0].value.a = type;
+	op.params[0].value.b = listen;
+	op.params[1].value.a = port;
+	op.params[2].tmpref.buffer = handle->buf;
+	op.params[2].tmpref.size = sizeof(handle->buf);
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_INPUT, TEEC_VALUE_INPUT,
+					 TEEC_MEMREF_TEMP_OUTPUT,
+					 TEEC_VALUE_OUTPUT);
+
+	res = TEEC_InvokeCommand(session, TA_SOCKET_CMD_VSOCK_OPEN, &op,
+				 ret_orig);
 
 	handle->blen = op.params[2].tmpref.size;
 	*error = op.params[3].value.a;
@@ -194,7 +226,84 @@ static TEE_Result socket_ioctl(TEEC_Session *session,
 	return res;
 }
 
+static TEE_Result
+socket_vsock_recv_flags(TEEC_Session *session, struct socket_handle *handle,
+			uint32_t timeout, void *data, size_t *dlen,
+			uint32_t *flags, uint32_t *ret_orig)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
 
+	op.params[0].tmpref.buffer = handle->buf;
+	op.params[0].tmpref.size = handle->blen;
+	op.params[1].tmpref.buffer = data;
+	op.params[1].tmpref.size = *dlen;
+	op.params[2].value.a = timeout;
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
+					 TEEC_MEMREF_TEMP_OUTPUT,
+					 TEEC_VALUE_INOUT, TEEC_NONE);
+
+	res = TEEC_InvokeCommand(session, TA_SOCKET_CMD_VSOCK_RECV_FLAGS, &op,
+				 ret_orig);
+	if (res)
+		return res;
+
+	*dlen = op.params[1].tmpref.size;
+	*flags = op.params[2].value.b;
+	return TEEC_SUCCESS;
+}
+
+static TEE_Result socket_vsock_send_flags(TEEC_Session *session,
+				       struct socket_handle *handle, void *data,
+				       size_t *dlen, uint32_t timeout,
+				       uint32_t flags, uint32_t *ret_orig)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
+
+	op.params[0].tmpref.buffer = handle->buf;
+	op.params[0].tmpref.size = handle->blen;
+	op.params[1].tmpref.buffer = data;
+	op.params[1].tmpref.size = *dlen;
+	op.params[2].value.a = timeout;
+	op.params[2].value.b = flags;;
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
+					 TEEC_MEMREF_TEMP_INPUT,
+					 TEEC_VALUE_INPUT, TEEC_VALUE_OUTPUT);
+
+	res = TEEC_InvokeCommand(session, TA_SOCKET_CMD_VSOCK_SEND_FLAGS, &op,
+				 ret_orig);
+	*dlen = op.params[3].value.a;
+	return res;
+}
+
+static TEE_Result socket_vsock_accept(TEEC_Session *session,
+				      struct socket_handle *handle,
+				      uint32_t timeout,
+				      struct socket_handle *accept_handle,
+				      uint32_t *ret_orig)
+{
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
+	TEEC_Result res = TEEC_SUCCESS;
+
+	op.params[0].tmpref.buffer = handle->buf;
+	op.params[0].tmpref.size = handle->blen;
+	op.params[1].value.a = timeout;
+	op.params[2].tmpref.buffer = accept_handle->buf;
+	op.params[2].tmpref.size = sizeof(accept_handle->buf);
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
+					 TEEC_VALUE_INPUT,
+					 TEEC_MEMREF_TEMP_OUTPUT, TEEC_NONE);
+
+	res = TEEC_InvokeCommand(session, TA_SOCKET_CMD_VSOCK_ACCEPT, &op,
+				 ret_orig);
+	if (!res)
+		accept_handle->blen = op.params[2].tmpref.size;
+	return res;
+}
 
 struct test_200x_io_state {
 	struct rand_stream *read_rs;
@@ -927,3 +1036,120 @@ out:
 }
 ADBG_CASE_DEFINE(regression, 2004, xtest_tee_test_2004,
 		"UDP iSocket API tests");
+
+
+static void xtest_tee_test_2005(ADBG_Case_t *c)
+{
+	TEEC_Result res = TEEC_SUCCESS;
+	TEEC_Session session = { };
+	struct socket_handle sh_listen = { };
+	struct socket_handle sh = { };
+	struct sockaddr_vm sa = { };
+	uint32_t port = 1234;
+	uint32_t flags = 0;
+	uint32_t ret_orig = 0;
+	uint32_t proto_error = 0;
+	char buffer[1024] = { 0 };
+	size_t blen = 0;
+	int fd = -1;
+	char msg[1024] =  { };
+	size_t msg_len = 0;
+	ssize_t ret = -1;
+	size_t n = 0;
+
+	Do_ADBG_BeginSubCase(c, "Open vsock");
+	fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+	if (!ADBG_EXPECT_COMPARE_SIGNED(c, fd, >=, 0)) {
+		warn("socket(AF_VSOCK, SOCK_STREAM)");
+		return;
+	}
+
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, xtest_teec_open_session(
+			&session, &socket_ta_uuid, NULL, &ret_orig)))
+		goto out_close_fd;
+	res = socket_vsock_open(&session, TEE_VSOCKET_TYPE_STREAM, port, true,
+				&sh_listen, &proto_error, &ret_orig);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto out_close_session;
+	Do_ADBG_EndSubCase(c, "Open vsock");
+
+	Do_ADBG_BeginSubCase(c, "Connect vsock");
+	sa = (struct sockaddr_vm){
+		.svm_family = AF_VSOCK,
+		.svm_cid = VMADDR_CID_HOST,
+		.svm_port = 1234,
+	};
+	ret = connect(fd, (struct sockaddr *)&sa, sizeof(sa));
+	if (!ADBG_EXPECT_COMPARE_SIGNED(c, ret, ==, 0)) {
+		warn("connect AF_VSOCK VMADDR_CID_HOST port 1234");
+		goto out_close_listen;
+	}
+	res = socket_vsock_accept(&session, &sh_listen, TEE_TIMEOUT_INFINITE,
+				  &sh, &ret_orig);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto out_close_listen;
+	Do_ADBG_EndSubCase(c, "Connect vsock");
+
+	Do_ADBG_BeginSubCase(c, "Send/recv vsock");
+	for (n = 0; n < 70; n++) {
+		Do_ADBG_Log("n %zu", n);
+		ret = snprintf(msg, sizeof(msg), "Hello world! %zu", n);
+		if (!ADBG_EXPECT_COMPARE_SIGNED(c, ret, >=, 0)) {
+			warn("snprintf");
+			goto out;
+		}
+		msg_len = ret + 1;
+		ret = send(fd, msg, msg_len, 0);
+		if (!ADBG_EXPECT_COMPARE_SIGNED(c, ret, >=, 0)) {
+			warn("send");
+			goto out;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+		blen = sizeof(buffer);
+		if (n)
+			res = socket_vsock_recv_flags(&session, &sh,
+						      TEE_TIMEOUT_INFINITE,
+						      buffer, &blen, &flags,
+						      &ret_orig);
+		else
+			res = socket_recv(&session, &sh, buffer, &blen,
+					  TEE_TIMEOUT_INFINITE, &ret_orig);
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c, res) ||
+		    !ADBG_EXPECT_BUFFER(c, msg, msg_len, buffer, ret))
+			goto out;
+
+		if (n)
+			res = socket_vsock_send_flags(&session, &sh, buffer,
+						      &blen, 0, 0, &ret_orig);
+		else
+			res = socket_send(&session, &sh, buffer, &blen, 0,
+					  &ret_orig);
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c, res) ||
+		    !ADBG_EXPECT_COMPARE_UNSIGNED(c, blen, ==, msg_len))
+			goto out;
+
+		memset(buffer, 0, sizeof(buffer));
+		ret = recv(fd, buffer, sizeof(buffer), 0);
+		if (!ADBG_EXPECT_COMPARE_SIGNED(c, ret, >=, 0)) {
+			warn("recv");
+			goto out;
+		}
+		if (!ADBG_EXPECT_BUFFER(c, msg, msg_len, buffer, ret))
+			goto out;
+	}
+	Do_ADBG_EndSubCase(c, "Send/recv vsock");
+
+out:
+	ADBG_EXPECT_TEEC_SUCCESS(c, socket_close(&session, &sh, &ret_orig));
+out_close_listen:
+	ADBG_EXPECT_TEEC_SUCCESS(c, socket_close(&session, &sh_listen,
+						 &ret_orig));
+out_close_session:
+	TEEC_CloseSession(&session);
+out_close_fd:
+	close(fd);
+
+}
+ADBG_CASE_DEFINE(regression, 2005, xtest_tee_test_2005,
+		"Vsocket tests");
