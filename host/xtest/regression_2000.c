@@ -3,6 +3,9 @@
  * Copyright (c) 2016, Linaro Limited
  */
 
+#include <sys/socket.h>
+#include <linux/vm_sockets.h>
+
 #include <assert.h>
 #include <err.h>
 #include <pthread.h>
@@ -15,9 +18,9 @@
 #include <ta_socket.h>
 #include <tee_isocket.h>
 #include <tee_tcpsocket.h>
-#include <__tee_tcpsocket_defines_extensions.h>
 #include <tee_udpsocket.h>
 #include <unistd.h>
+#include <__tee_tcpsocket_defines_extensions.h>
 
 #include "xtest_test.h"
 #include "xtest_helpers.h"
@@ -927,3 +930,60 @@ out:
 }
 ADBG_CASE_DEFINE(regression, 2004, xtest_tee_test_2004,
 		"UDP iSocket API tests");
+
+
+static void xtest_tee_test_2005(ADBG_Case_t *c)
+{
+	struct sockaddr_vm sa = { };
+	char buffer[1024] = { 0 };
+	int fd = -1;
+	char msg[] = "Hello world!";
+	ssize_t res = -1;
+	size_t n = 0;
+
+	Do_ADBG_BeginSubCase(c, "Open vsock");
+	fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+	if (!ADBG_EXPECT_COMPARE_SIGNED(c, fd, >=, 0)) {
+		warn("socket(AF_VSOCK, SOCK_STREAM)");
+		return;
+	}
+	Do_ADBG_EndSubCase(c, "Open vsock");
+
+	Do_ADBG_BeginSubCase(c, "Connect vsock");
+	sa = (struct sockaddr_vm){
+		.svm_family = AF_VSOCK,
+		.svm_cid = VMADDR_CID_HOST,
+		.svm_port = 1234,
+	};
+	res = connect(fd, (struct sockaddr *)&sa, sizeof(sa));
+	if (!ADBG_EXPECT_COMPARE_SIGNED(c, res, ==, 0)) {
+		warn("connect AF_VSOCK VMADDR_CID_HOST port 1234");
+		goto out;
+	}
+	Do_ADBG_EndSubCase(c, "Connect vsock");
+
+	Do_ADBG_BeginSubCase(c, "Send/recv vsock");
+	for (n = 0; n < 70; n++) {
+		res = send(fd, msg, sizeof(msg), 0);
+		if (!ADBG_EXPECT_COMPARE_SIGNED(c, res, >=, 0)) {
+			warn("send");
+			goto out;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+		res = recv(fd, buffer, sizeof(buffer), 0);
+		if (!ADBG_EXPECT_COMPARE_SIGNED(c, res, >=, 0)) {
+			warn("recv");
+			goto out;
+		}
+		if (!ADBG_EXPECT_BUFFER(c, msg, sizeof(msg), buffer, res))
+			goto out;
+	}
+	Do_ADBG_EndSubCase(c, "Send/recv vsock");
+
+out:
+	close(fd);
+
+}
+ADBG_CASE_DEFINE(regression, 2005, xtest_tee_test_2005,
+		"Vsocket tests");
